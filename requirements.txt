@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 fastapi==0.111.0
 uvicorn==0.22.0
 sqlalchemy==2.0.0
@@ -11,3 +12,6 @@ firebase_admin==6.7.0
 passlib==1.7.4
 langgraph==0.059
 alembic==1.15.2
+=======
+
+>>>>>>> 69019a1c3935cbe7f3a5547688f7088f7f4d4f4d
