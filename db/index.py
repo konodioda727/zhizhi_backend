@@ -3,9 +3,12 @@ from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 USERNAME = 'root'
-PASSWORD = 'Ak472700'
+PASSWORD = '123456'
 PORT = '3306'
-DB_NAME = 'Zhizhi'
+DB_NAME = 'zhizhi'
+
+
+
 
 DATABASE_URL = f"mysql+pymysql://{USERNAME}:{PASSWORD}@localhost:{PORT}/{DB_NAME}" 
 
