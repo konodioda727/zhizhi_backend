@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, UploadFile, Depends, File, Form
+from fastapi import FastAPI, HTTPException, Request, UploadFile, Depends, File, Form,APIRouter
 from pydantic import BaseModel
 from typing import Dict, List
 import uuid
@@ -19,7 +19,16 @@ import base64
 from graph.index import create_graph, CustomHumanMessage, execute_graph
 import os
 
-app = FastAPI()
+
+api_router = APIRouter()
+app = FastAPI(    
+    title="智之管理系统",
+    description="智之管理系统后端API",
+    version="1.0.0",
+    openapi_url="/api/openapi.json",   # OpenAPI schema 路径
+    docs_url="/api/docs",              # Swagger UI 路径
+    redoc_url="/api/redoc" 
+    )
 IMAGE_FOLDER = "./images"
 
 origins = ["*"]
@@ -43,7 +52,7 @@ def get_db():
         yield db
     finally:
         db.close()
-@app.post("/chat/start-session/")
+@api_router.post("/chat/start-session/")
 async def start_session(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     session_id = str(uuid.uuid4())
     db_session = Session(id=session_id)
@@ -52,7 +61,7 @@ async def start_session(db: Session = Depends(get_db), user: dict = Depends(get_
     db.refresh(db_session)
     return {"session_id": session_id}
 
-@app.post("/ocr/upload-invoke/")
+@api_router.post("/ocr/upload-invoke/")
 async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     db_user = db.query(User).filter(User.email == user['email']).first()
     image_path = f"./images/{file.filename}"
@@ -68,7 +77,7 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
     return {
         "answer": responses,
     }
-@app.get("/ocr/history/")
+@api_router.get("/ocr/history/")
 async def get_all_ocr_history(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     db_user = db.query(User).filter(User.email == user['email']).first()
     all_history = db.query(OcrHistory).all()
@@ -87,7 +96,7 @@ async def get_all_ocr_history(db: Session = Depends(get_db), user: dict = Depend
         }
         for history in user_ocr_history
     ]
-@app.post("/ocr/invoke")
+@api_router.post("/ocr/invoke")
 async def invoke_ocr(data: OcrData, request: Request, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     db_user = db.query(User).filter(User.email == user['email']).first()
     questions = imageRetriever.read_question_answer_pair(read_image_from_url(data.image))
@@ -98,7 +107,7 @@ async def invoke_ocr(data: OcrData, request: Request, db: Session = Depends(get_
     return {
         "answer": responses,
     }
-@app.post("/chat/invoke/")
+@api_router.post("/chat/invoke/")
 async def invoke_model(data: InputData, request: Request, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     session_id = request.headers.get("Session-ID")
     if not session_id:
@@ -127,7 +136,7 @@ async def invoke_model(data: InputData, request: Request, db: Session = Depends(
         "evaluation_prompt": "Please evaluate the response with a score from 1 to 5, and optionally provide feedback."
     }
 
-@app.post("/chat/evaluate/", response_model=None)
+@api_router.post("/chat/evaluate/", response_model=None)
 async def evaluate_model(data: EvaluationData, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     session = db.query(Session).filter(Session.id == data.session_id).first()
     if not session:
@@ -139,14 +148,14 @@ async def evaluate_model(data: EvaluationData, db: Session = Depends(get_db), us
     
     return {"message": "Evaluation received successfully"}
 
-@app.get("/chat/history/{session_id}", response_model=HistoryListResponse)
+@api_router.get("/chat/history/{session_id}", response_model=HistoryListResponse)
 async def get_history(session_id: str, db: Session = Depends(get_db),user: dict = Depends(get_current_user)):
     histories = db.query(History).filter(History.session_id == session_id).all()
     if not histories:
         raise HTTPException(status_code=404, detail="No history found for this session")
     return {"histories": histories}
 
-@app.post("/auth/register/", response_model=UserResponse)
+@api_router.post("/auth/register/", response_model=UserResponse)
 def register(user: UserCreate, db: Session = Depends(get_db)):
     # Check if the user already exists
     db_user = db.query(User).filter(User.email == user.email).first()
@@ -163,7 +172,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     return {"detail": 'successfully registered'}
 
 
-@app.post("/auth/login/", response_model=TokenResponse)
+@api_router.post("/auth/login/", response_model=TokenResponse)
 def login(user: UserCreate, db: Session = Depends(get_db)):
     # Check if the user exists
     db_user = db.query(User).filter(User.email == user.email).first()
@@ -176,7 +185,7 @@ def login(user: UserCreate, db: Session = Depends(get_db)):
     return {"access_token": access_token, "token_type": "bearer"}
 
 # 提交个人信息接口
-@app.post("/submit-info/")
+@api_router.post("/submit-info/")
 async def submit_info(
     nickname: str = Form(None),
     avatar: UploadFile = File(None),
@@ -203,7 +212,7 @@ async def submit_info(
     return {"id": user.id, "email": user.email, "nickname": user.nickname, "avatar": image_url}
 
 # 获取个人信息接口
-@app.get("/get-info")
+@api_router.get("/get-info")
 async def get_info(db: Session = Depends(get_db), userToken: Dict = Depends(get_current_user)):
     incorrect_count = db.query(OcrHistory).filter(OcrHistory.wrong_place == False).count()
     user = db.query(User).filter(User.email == userToken["email"]).first()
@@ -217,7 +226,7 @@ async def get_info(db: Session = Depends(get_db), userToken: Dict = Depends(get_
         "avatar_data": user.avatar_data
     }
     
-@app.get("/images/{filename}")
+@api_router.get("/images/{filename}")
 async def get_image(filename: str):
     try:
         # 构建图片的相对路径
@@ -229,3 +238,9 @@ async def get_image(filename: str):
         return StreamingResponse(open(image_path, "rb"), media_type="image/png")
     except IOError:
         raise HTTPException(status_code=500, detail="Server error")
+
+
+app.include_router(api_router, prefix="/api", tags=["API"])
+
+
+        
